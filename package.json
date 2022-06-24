@@ -1,0 +1,30 @@
+{
+  "name": "projeto12-batepapo-uol-api",
+  "version": "1.0.0",
+  "description": "API to bate papo uol chat",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VicterHuger/api-bate-papo-uol.git"
+  },
+  "keywords": ["chat","uol","api"],
+  "author": "Victor Hugo Simões",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/VicterHuger/api-bate-papo-uol/issues"
+  },
+  "homepage": "https://github.com/VicterHuger/api-bate-papo-uol#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "joi": "^17.6.0",
+    "mongodb": "^4.7.0",
+    "nodemon": "^2.0.18"
+  }
+}
