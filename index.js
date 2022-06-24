@@ -3,6 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import {MongoClient, ObjectId} from "mongodb";
 import joi from "joi";
+import dayjs from "dayjs";
+
 
 dotenv.config();
 
@@ -23,6 +25,12 @@ async function conectionMongoClient (){
 
 function closeMongoClient(){
     mongoClient.close();
+}
+
+async function generateArrayNames(db){
+    const participants=await db.collection('participants').find().toArray();
+    const userNames= participants.map(participant=>participant.name);
+    return new Array(...userNames);
 }
 
 app.post('/participants',async(req,res)=>{
@@ -64,6 +72,46 @@ app.get('/participants', async(req,res)=>{
         res.status(500).send(error);
     }
 });
+
+app.post('/messages', async(req,res)=>{
+
+    const message={...req.body,from:req.headers.user};
+    try{
+        const db= await conectionMongoClient();
+        const userNamesArray= await generateArrayNames(db);
+        const messagesSchema= joi.object({
+            to:joi.string().min(1).required(),
+            text:joi.string().min(1).required(),
+            type:joi.string().valid('message','private_message').required(),
+            from: joi.string().valid(...userNamesArray).required(),
+        });
+
+        const validation = messagesSchema.validate(message);
+        
+        if(validation.error){
+            res.status(422).send(validation.error.details[0].message)
+            closeMongoClient();
+            return;
+        }
+
+        await db.collection('messages').insertOne({
+            to:message.to,
+            text:message.text,
+            type:message.type,
+            from:message.from,
+            time:dayjs().format('HH:mm:ss'),
+        })
+
+        res.sendStatus(201);
+        closeMongoClient();
+        return;
+
+    }catch(error){
+        closeMongoClient();
+        return res.status(500).send(error);
+    }
+    
+})
 
 
 app.listen(5000,()=>{console.log("Server is running on port 5000")});
