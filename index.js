@@ -141,4 +141,28 @@ app.get('/messages', async(req,res)=>{
 
 });
 
+app.post('/status', async(req,res)=>{
+    const userName=req.headers.user;
+    if(!userName) return res.status(404).send('Campo header inválido!')
+    try{
+        const db= await conectionMongoClient();
+        const participant= await db.collection('participants').find({name:userName}).toArray();
+        if(participant.length===0) {
+            closeMongoClient();
+            return res.sendStatus(404);
+        }
+        await db.collection('participants')
+            .findOneAndUpdate(
+                {name:userName},
+                {$set:{lastStatus:Date.now()}}
+            );
+        res.sendStatus(200);
+        closeMongoClient();
+    }catch(error){
+        res.status(500).send(error);
+        closeMongoClient();
+    }
+})
+
+
 app.listen(process.env.PORT,()=>{console.log(`Server is running on port ${process.env.PORT}`)});
