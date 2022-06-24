@@ -52,8 +52,18 @@ app.post('/participants',async(req,res)=>{
         res.status(500).send(error);
         closeMongoClient();
     }
-})
+});
 
+app.get('/participants', async(req,res)=>{
+    try{
+        const db= await conectionMongoClient();
+        const participants= await db.collection("participants").find().toArray();
+        res.send(participants);
+        closeMongoClient();
+    }catch(error){
+        res.status(500).send(error);
+    }
+});
 
 
 app.listen(5000,()=>{console.log("Server is running on port 5000")});
