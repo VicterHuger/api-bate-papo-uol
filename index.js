@@ -111,7 +111,34 @@ app.post('/messages', async(req,res)=>{
         return res.status(500).send(error);
     }
     
-})
+});
 
+app.get('/messages', async(req,res)=>{
+    let limit= parseInt(req.query.limit);
+    const userName=req.headers.user;
+    
+    try{
+        const db= await conectionMongoClient();
+        if(!limit) limit=(await db.collection('message').find({}).toArray()).length;
+        const query={
+            $or: [
+                {type:'message'},
+                {type:'private_message',to:userName},
+                {type:'private_message',from:userName},
+            ]
+        };
+        const options={
+            sort:{time:-1},
+            limit,
+        }
+        const messages=await db.collection('messages').find(query,options).toArray();
+        res.send(messages);
+        closeMongoClient();
+    }catch(error){
+        res.status(500).send(error);
+        closeMongoClient();
+    }
 
-app.listen(5000,()=>{console.log("Server is running on port 5000")});
+});
+
+app.listen(process.env.PORT,()=>{console.log(`Server is running on port ${process.env.PORT}`)});
