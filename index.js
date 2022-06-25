@@ -175,6 +175,29 @@ app.post('/status', async(req,res)=>{
         res.status(500).send(error);
         closeMongoClient();
     }
+});
+
+app.delete('/messages/:id_da_mensagem', async(req,res)=>{
+    const id=req.params.id_da_mensagem;
+    if(id.length!==24) return res.status(404).send('O id fornecido não é válido!');
+    const userName=stripHtml(req.headers.user).result.trim();
+    
+    try{
+        const db=await conectionMongoClient();
+        const message=await db.collection('messages').findOne({_id: new ObjectId(id)});
+        if(!message){
+            return res.status(404).send('O id fornecido não é válido!');
+        }
+        if(userName!==message.from){
+            return res.status(401).send('Este usuário não é o dono da mensagem!');
+        }
+        await db.collection('messages').deleteOne({_id: new ObjectId(id)});
+        res.sendStatus(200);
+        closeMongoClient();
+    }catch(error){
+        res.status(500).send(error);
+        closeMongoClient();
+    }
 })
 
 setInterval(async()=>{
@@ -207,9 +230,5 @@ setInterval(async()=>{
     console.log(error);
   }
 },15000);
-
-
-
-
 
 app.listen(process.env.PORT,()=>{console.log(`Server is running on port ${process.env.PORT}`)});
