@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import {MongoClient, ObjectId} from "mongodb";
 import joi from "joi";
 import dayjs from "dayjs";
+import { stripHtml } from "string-strip-html";
 
 
 dotenv.config();
@@ -29,12 +30,14 @@ function closeMongoClient(){
 
 async function generateArrayNames(db){
     const participants=await db.collection('participants').find().toArray();
-    const userNames= participants.map(participant=>participant.name);
+    const userNames= participants.map(participant=>stripHtml(participant.name).result.trim());
     return new Array(...userNames);
 }
 
+
 app.post('/participants',async(req,res)=>{
     const objName=req.body;
+    const name=stripHtml(objName.name).result.trim();
     const validation= participantsSchema.validate(objName);
     if (validation.error) {
         const message=validation.error.details[0].message;
@@ -43,15 +46,22 @@ app.post('/participants',async(req,res)=>{
     try{
         const db= await conectionMongoClient();
         
-        const userName= await db.collection("participants").findOne({name:objName.name});
+        const userName= await db.collection("participants").findOne({name});
         if(userName){
-            res.status(409).send(`O nome ${objName.name} já está sendo utilizado!`);
+            res.status(409).send(`O nome ${name} já está sendo utilizado!`);
             closeMongoClient();
             return;
         }
         await db.collection("participants").insertOne({
-            name:objName.name,
+            name,
             lastStatus: Date.now(),
+        });
+        await db.collection("messages").insertOne({
+            from: name,
+            to: 'Todos', 
+            text: 'entra na sala...',
+            type: 'status', 
+            time: dayjs().format('HH:mm:ss')
         });
         res.sendStatus(201);
         closeMongoClient();
@@ -93,12 +103,12 @@ app.post('/messages', async(req,res)=>{
             closeMongoClient();
             return;
         }
-
+        
         await db.collection('messages').insertOne({
-            to:message.to,
-            text:message.text,
-            type:message.type,
-            from:message.from,
+            to:stripHtml(message.to).result.trim(),
+            text:stripHtml(message.text).result.trim(),
+            type:stripHtml(message.type).result.trim(),
+            from:stripHtml(message.from).result.trim(),
             time:dayjs().format('HH:mm:ss'),
         })
 
@@ -115,7 +125,8 @@ app.post('/messages', async(req,res)=>{
 
 app.get('/messages', async(req,res)=>{
     let limit= parseInt(req.query.limit);
-    const userName=req.headers.user;
+    const userName=stripHtml(req.headers.user).result.trim();
+    
     
     try{
         const db= await conectionMongoClient();
@@ -129,7 +140,7 @@ app.get('/messages', async(req,res)=>{
             ]
         };
         const options={
-            sort:{time:-1},
+            sort:{time:1},
             limit,
         }
         const messages=await db.collection('messages').find(query,options).toArray();
@@ -143,7 +154,8 @@ app.get('/messages', async(req,res)=>{
 });
 
 app.post('/status', async(req,res)=>{
-    const userName=req.headers.user;
+    const userName=stripHtml(req.headers.user).result.trim();
+    
     if(!userName) return res.status(404).send('Campo header inválido!')
     try{
         const db= await conectionMongoClient();
@@ -191,8 +203,8 @@ setInterval(async()=>{
     }
     
   }catch(error){
-    console.log(error);
     closeMongoClient();
+    console.log(error);
   }
 },15000);
 
