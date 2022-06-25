@@ -123,6 +123,7 @@ app.get('/messages', async(req,res)=>{
         const query={
             $or: [
                 {type:'message'},
+                {type:'status'},
                 {type:'private_message',to:userName},
                 {type:'private_message',from:userName},
             ]
@@ -163,6 +164,40 @@ app.post('/status', async(req,res)=>{
         closeMongoClient();
     }
 })
+
+setInterval(async()=>{
+  try{
+    const db=await conectionMongoClient();
+    const participantsNames= await generateArrayNames(db);    
+    const participantsDeleted= await db.collection('participants').deleteMany({
+        lastStatus:{
+            $lt:(Date.now()-10000)
+        }
+    });
+    
+    if(participantsDeleted.deletedCount>0){
+        const participantsAfterDeleted= await generateArrayNames(db);
+        participantsNames.forEach(async participant=>{
+            if(!participantsAfterDeleted.includes(participant)){
+                return db.collection('messages').insertOne({
+                    from: participant,
+                    to: 'Todos', 
+                    text: 'sai da sala...', 
+                    type: 'status',
+                    time: dayjs().format('HH:mm:ss'),
+                })
+            }
+        })
+    }
+    
+  }catch(error){
+    console.log(error);
+    closeMongoClient();
+  }
+},15000);
+
+
+
 
 
 app.listen(process.env.PORT,()=>{console.log(`Server is running on port ${process.env.PORT}`)});
