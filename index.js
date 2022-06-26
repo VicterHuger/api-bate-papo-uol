@@ -6,7 +6,6 @@ import joi from "joi";
 import dayjs from "dayjs";
 import { stripHtml } from "string-strip-html";
 
-
 dotenv.config();
 
 const app=express();
@@ -18,6 +17,15 @@ const mongoClient = new MongoClient(process.env.URL_MONGODB);
 const participantsSchema=joi.object({
     name:joi.string().required().min(1),
 })
+
+async function generateMessageSchema(array){
+    return joi.object({
+        to:joi.string().min(1).required(),
+        text:joi.string().min(1).required(),
+        type:joi.string().valid('message','private_message').required(),
+        from: joi.string().valid(...array).required(),
+    });
+}
 
 async function conectionMongoClient (){
     await mongoClient.connect();
@@ -33,7 +41,6 @@ async function generateArrayNames(db){
     const userNames= participants.map(participant=>stripHtml(participant.name).result.trim());
     return new Array(...userNames);
 }
-
 
 app.post('/participants',async(req,res)=>{
     const objName=req.body;
@@ -89,17 +96,14 @@ app.post('/messages', async(req,res)=>{
     try{
         const db= await conectionMongoClient();
         const userNamesArray= await generateArrayNames(db);
-        const messagesSchema= joi.object({
-            to:joi.string().min(1).required(),
-            text:joi.string().min(1).required(),
-            type:joi.string().valid('message','private_message').required(),
-            from: joi.string().valid(...userNamesArray).required(),
-        });
-
-        const validation = messagesSchema.validate(message);
+        
+        const messagesSchema= await generateMessageSchema(userNamesArray);
+        
+        const validation = messagesSchema.validate(message,{ abortEarly: false});
         
         if(validation.error){
-            res.status(422).send(validation.error.details[0].message)
+            const errorMessages=validation.error.details.map(item=>item.message);
+            res.status(422).send(errorMessages);
             closeMongoClient();
             return;
         }
@@ -140,10 +144,10 @@ app.get('/messages', async(req,res)=>{
             ]
         };
         const options={
-            sort:{time:1},
             limit,
+            sort:{_id:-1},
         }
-        const messages=await db.collection('messages').find(query,options).toArray();
+        const messages= (await db.collection('messages').find(query,options).toArray()).reverse();
         res.send(messages);
         closeMongoClient();
     }catch(error){
@@ -154,6 +158,7 @@ app.get('/messages', async(req,res)=>{
 });
 
 app.post('/status', async(req,res)=>{
+    
     const userName=stripHtml(req.headers.user).result.trim();
     
     if(!userName) return res.status(404).send('Campo header inválido!')
@@ -165,7 +170,7 @@ app.post('/status', async(req,res)=>{
             return res.sendStatus(404);
         }
         await db.collection('participants')
-            .findOneAndUpdate(
+            .updateOne(
                 {name:userName},
                 {$set:{lastStatus:Date.now()}}
             );
@@ -197,6 +202,53 @@ app.delete('/messages/:id_da_mensagem', async(req,res)=>{
     }catch(error){
         res.status(500).send(error);
         closeMongoClient();
+    }
+});
+
+app.put('/messages/:id_da_mensagem', async(req,res)=>{
+    const message={...req.body,from:req.headers.user};
+    const id=req.params.id_da_mensagem;
+    if(id.length!==24) return res.status(404).send('O id fornecido não é válido!');
+    try{
+        const db= await conectionMongoClient();
+        const userNamesArray= await generateArrayNames(db);
+        const messagesSchema= await generateMessageSchema(userNamesArray);
+        const validation = messagesSchema.validate(message, { abortEarly: false });
+        
+        if(validation.error){
+            const errorMessages=validation.error.details.map(item=>item.message);
+            res.status(422).send(errorMessages);
+            closeMongoClient();
+            return;
+        }
+
+        const messageDb=await db.collection('messages').findOne({_id: new ObjectId(id)});
+        if(!messageDb) {
+            closeMongoClient();
+            return res.status(404).send('O id fornecido não é válido!');
+        }
+        if(messageDb.from!==message.from){
+            closeMongoClient();
+            return res.status(401).send('Este usuário não é o dono da mensagem!');
+        } 
+
+        await db.collection('messages').updateOne(
+                {
+                    _id: messageDb._id
+                },
+                {
+                    $set:
+                    {
+                        to:stripHtml(message.to).result.trim(),
+                        text:stripHtml(message.text).result.trim(),
+                        type:stripHtml(message.type).result.trim(),
+                        from:stripHtml(message.from).result.trim(),
+                        time:dayjs().format('HH:mm:ss'),
+                    }
+                });
+        res.sendStatus(200);
+    }catch(error){
+        res.status(500).send(error);
     }
 })
 
